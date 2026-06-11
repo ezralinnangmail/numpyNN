@@ -40,11 +40,11 @@ def flatten(arr):
 # simple neural network architecture with 784 input neurons, 1 hidden layer of 20 neurons, and 1 output neuron
 class AntonMNIST:
     # parameter initialization
-    def __init__(self, input_units=784, hidden_units=20):
+    def __init__(self, input_units=784, def_hidden_units=20):
         rng1 = np.random.default_rng(5)
-        self.w1 = rng1.standard_normal((hidden_units, input_units)) * np.sqrt(2 / input_units)
-        self.b1 = np.zeros((hidden_units, 1))
-        self.w2 = rng1.standard_normal((10, hidden_units)) * np.sqrt(2 / hidden_units)
+        self.w1 = rng1.standard_normal((def_hidden_units, input_units)) * np.sqrt(2 / input_units)
+        self.b1 = np.zeros((def_hidden_units, 1))
+        self.w2 = rng1.standard_normal((10, def_hidden_units)) * np.sqrt(2 / def_hidden_units)
         self.b2 = np.zeros((10, 1))
 
         # store activations for backpropogation and gradients for update
@@ -61,11 +61,7 @@ class AntonMNIST:
     # gradients of activation functions
     @staticmethod
     def relu_derivative(inputs):
-        relu_grad = np.copy(inputs)
-        relu_grad[(relu_grad >= 0)] = 1
-        relu_grad[(relu_grad < 0)] = 0
-        assert (relu_grad == (inputs >= 0).astype(float)).all()
-        return relu_grad
+        return (inputs > 0).astype(float)
 
     # softmax function
     @staticmethod
@@ -120,11 +116,11 @@ class AntonMNIST:
         self.gradients["db2"] = db2
 
     # update parameters based on the gradients from backpropogation and the learning rate (lr)
-    def update_parameters(self, lr):
-        self.w1 += - lr * self.gradients["dw1"]
-        self.b1 += - lr * self.gradients["db1"]
-        self.w2 += - lr * self.gradients["dw2"]
-        self.b2 += - lr * self.gradients["db2"]
+    def update_parameters(self, learning_rate):
+        self.w1 += - learning_rate * self.gradients["dw1"]
+        self.b1 += - learning_rate * self.gradients["db1"]
+        self.w2 += - learning_rate * self.gradients["dw2"]
+        self.b2 += - learning_rate * self.gradients["db2"]
 
 
 # create batches of size batch_size from x and y
@@ -157,6 +153,39 @@ def one_hot(labels2, num_classes=10):
     output[labels2, np.arange(labels2.shape[0])] = 1
     return output
 
+
+def train_model(
+        lr_,
+        hu_,
+        bs_,
+        ne
+):
+    training_model = AntonMNIST(def_hidden_units=hu_)
+
+    train_batches = get_batches(
+        bs_,
+        x_train_scaled_shuffled,
+        y_train_shuffled
+    )
+
+    for _ in range(ne):
+        for train_features, train_labels in train_batches:
+
+            output_logits = training_model.forward(train_features)
+
+            training_model.calculate_gradients(train_labels)
+            training_model.update_parameters(lr_)
+
+    train_dev_logits = training_model.forward(x_dev_scaled)
+
+    return {
+        "dev_loss": training_model.calculate_loss(train_dev_logits, y_dev),
+        "dev_acc": accuracy(train_dev_logits, y_dev)
+    }
+
+
+
+
 if __name__ == "__main__":
     # load in train, dev, and test datasets
     x_train, y_train = read_images("data/fashion_mnist/train/")
@@ -183,60 +212,29 @@ if __name__ == "__main__":
     y_train_shuffled = y_train[indices]
 
     # hyperparameters (external parameters set by engineer)
-    learning_rate = 0.0001
-    batch_size = 32
+    learning_rates = [0.01, 0.001, 0.0001]
+    hidden_units = [100]
+    batch_sizes = [16, 32, 64]
 
-    batches = get_batches(batch_size, x_train_scaled_shuffled, y_train_shuffled)
-    model = AntonMNIST()
+    results = []
 
-    # plotting
-    import matplotlib.pyplot as plt
+    for lr in learning_rates:
+        for hu in hidden_units:
+            for bs in batch_sizes:
 
-    train_loss_history = []
-    dev_loss_history = []
-    x_axis = []
+                metrics = train_model(
+                    lr_=lr,
+                    hu_=hu,
+                    bs_=bs,
+                    ne=10
+                )
 
-    num_epochs = 10
+                results.append({
+                    "lr": lr,
+                    "hidden_units": hu,
+                    "batch_size": bs,
+                    "dev_acc": metrics["dev_acc"],
+                    "dev_loss": metrics["dev_loss"]
+                })
 
-    for epoch in range(num_epochs):
-        for batch_idx, (features, labels) in enumerate(batches):
-
-            # forward pass
-            output_logits = model.forward(features)
-            train_loss = model.calculate_loss(output_logits, labels)
-
-            # backwards pass
-            model.calculate_gradients(labels)
-            model.update_parameters(learning_rate)
-
-            # log 5 times per epoch
-            if batch_idx % (len(batches) // 5) == 0:
-                dev_logits = model.forward(x_dev_scaled)
-                dev_loss = model.calculate_loss(dev_logits, y_dev)
-                dev_acc = accuracy(dev_logits, y_dev)
-
-                progress = epoch + batch_idx / len(batches)
-
-                train_loss_history.append(train_loss)
-                dev_loss_history.append(dev_loss)
-                x_axis.append(progress)
-
-    plt.figure(figsize=(8, 5))
-
-    plt.plot(x_axis, train_loss_history, marker='o', label="Training Loss")
-    plt.plot(x_axis, dev_loss_history, marker='x', label="Validation Loss")
-
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.title(f"Training vs Validation Loss | BS: {batch_size} LR: {learning_rate}")
-    plt.legend()
-    plt.grid(True)
-
-    plt.show()
-
-    # formal testing
-    test_output_logits = model.forward(x_test_scaled)
-    loss_test = model.calculate_loss(test_output_logits, y_test)
-    acc_test = accuracy(test_output_logits, y_test)
-    print(f"Loss on testing dataset: {loss_test}")
-    print(f"Accuracy on testing dataset: {acc_test}")
+                print(results[-1])
