@@ -47,6 +47,12 @@ class AntonMNIST:
         self.w2 = rng1.standard_normal((10, def_hidden_units)) * np.sqrt(2 / def_hidden_units)
         self.b2 = np.zeros((10, 1))
 
+        # adding velocities for momentum
+        self.vdw1 = np.zeros_like(self.w1)
+        self.vdb1 = np.zeros_like(self.b1)
+        self.vdw2 = np.zeros_like(self.w2)
+        self.vdb2 = np.zeros_like(self.b2)
+
         # store activations for backpropogation and gradients for update
         self.activations = {}
         self.gradients = {}
@@ -116,11 +122,15 @@ class AntonMNIST:
         self.gradients["db2"] = db2
 
     # update parameters based on the gradients from backpropogation and the learning rate (lr)
-    def update_parameters(self, learning_rate):
-        self.w1 += - learning_rate * self.gradients["dw1"]
-        self.b1 += - learning_rate * self.gradients["db1"]
-        self.w2 += - learning_rate * self.gradients["dw2"]
-        self.b2 += - learning_rate * self.gradients["db2"]
+    def update_parameters(self, learning_rate, beta=0.9):
+        self.vdw1 = beta * self.vdw1 + (1 - beta) * self.gradients["dw1"]
+        self.w1 += - learning_rate * self.vdw1
+        self.vdb1 = beta * self.vdb1 + (1 - beta) * self.gradients["db1"]
+        self.b1 += - learning_rate * self.vdb1
+        self.vdw2 = beta * self.vdw2 + (1 - beta) * self.gradients["dw2"]
+        self.w2 += - learning_rate * self.vdw2
+        self.vdb2 = beta * self.vdb2 + (1 - beta) * self.gradients["db2"]
+        self.b2 += - learning_rate * self.vdb2
 
 
 # create batches of size batch_size from x and y
@@ -212,9 +222,9 @@ if __name__ == "__main__":
     y_train_shuffled = y_train[indices]
 
     # hyperparameters (external parameters set by engineer)
-    learning_rates = [0.01, 0.001, 0.0001]
-    hidden_units = [100]
-    batch_sizes = [16, 32, 64]
+    learning_rates = [0.01]
+    hidden_units = [50, 100, 200]
+    batch_sizes = [8, 16, 32]
 
     results = []
 
