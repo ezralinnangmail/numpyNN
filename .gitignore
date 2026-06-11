@@ -1,0 +1,15 @@
+# datasets
+data/
+
+# cashed datasets
+*.npz
+
+# python cache
+__pychache__/
+*.pyc
+
+# IDE files
+.idea/
+
+# virtual environments
+.venv/
