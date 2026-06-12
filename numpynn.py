@@ -5,6 +5,8 @@ np.random.seed(5)
 import os
 from PIL import Image
 
+import time
+
 
 # image loading pipeline
 def read_images(folder_path):
@@ -42,10 +44,10 @@ class AntonMNIST:
     # parameter initialization
     def __init__(self, input_units=784, def_hidden_units=20):
         rng1 = np.random.default_rng(5)
-        self.w1 = rng1.standard_normal((def_hidden_units, input_units)) * np.sqrt(2 / input_units)
-        self.b1 = np.zeros((def_hidden_units, 1))
-        self.w2 = rng1.standard_normal((10, def_hidden_units)) * np.sqrt(2 / def_hidden_units)
-        self.b2 = np.zeros((10, 1))
+        self.w1 = rng1.standard_normal((def_hidden_units, input_units)) * np.sqrt(2 / input_units).astype(np.float32)
+        self.b1 = np.zeros((def_hidden_units, 1)).astype(np.float32)
+        self.w2 = rng1.standard_normal((10, def_hidden_units)) * np.sqrt(2 / def_hidden_units).astype(np.float32)
+        self.b2 = np.zeros((10, 1)).astype(np.float32)
 
         # adding velocities for momentum
         self.vdw1 = np.zeros_like(self.w1)
@@ -124,13 +126,13 @@ class AntonMNIST:
     # update parameters based on the gradients from backpropogation and the learning rate (lr)
     def update_parameters(self, learning_rate, beta=0.9):
         self.vdw1 = beta * self.vdw1 + (1 - beta) * np.square(self.gradients["dw1"])
-        self.w1 += - learning_rate * (self.gradients["dw1"] / np.sqrt(self.vdw1) + 1e-8)
+        self.w1 += - learning_rate * self.gradients["dw1"] / (np.sqrt(self.vdw1) + 1e-8)
         self.vdb1 = beta * self.vdb1 + (1 - beta) * np.square(self.gradients["db1"])
-        self.b1 += - learning_rate * (self.gradients["db1"] / np.sqrt(self.vdb1) + 1e-8)
+        self.b1 += - learning_rate * self.gradients["db1"] / (np.sqrt(self.vdb1) + 1e-8)
         self.vdw2 = beta * self.vdw2 + (1 - beta) * np.square(self.gradients["dw2"])
-        self.w2 += - learning_rate * (self.gradients["dw2"] / np.sqrt(self.vdw2) + 1e-8)
+        self.w2 += - learning_rate * self.gradients["dw2"] / (np.sqrt(self.vdw2) + 1e-8)
         self.vdb2 = beta * self.vdb2 + (1 - beta) * np.square(self.gradients["db2"])
-        self.b2 += - learning_rate * (self.gradients["db2"] / np.sqrt(self.vdb2) + 1e-8)
+        self.b2 += - learning_rate * self.gradients["db2"] / (np.sqrt(self.vdb2) + 1e-8)
 
 
 # create batches of size batch_size from x and y
@@ -172,16 +174,22 @@ def train_model(
 ):
     training_model = AntonMNIST(def_hidden_units=hu_)
 
-    train_batches = get_batches(
-        bs_,
-        x_train_scaled_shuffled,
-        y_train_shuffled
-    )
-
     for _ in range(ne):
-        for train_features, train_labels in train_batches:
+        indices_ = np.arange(x_train_scaled_shuffled.shape[1])
+        rng_ = np.random.default_rng(5)
+        rng_.shuffle(indices_)
 
-            output_logits = training_model.forward(train_features)
+        x_epoch = x_train_scaled_shuffled[:, indices_]
+        y_epoch = y_train_shuffled[indices_]
+
+        train_batches = get_batches(
+            bs_,
+            x_epoch,
+            y_epoch
+        )
+
+        for train_features, train_labels in train_batches:
+            training_model.forward(train_features)
 
             training_model.calculate_gradients(train_labels)
             training_model.update_parameters(lr_)
@@ -197,17 +205,22 @@ def train_model(
 
 
 if __name__ == "__main__":
+
+    start = time.time()
+
     # load in train, dev, and test datasets
     x_train, y_train = read_images("data/fashion_mnist/train/")
     x_dev, y_dev = read_images("data/fashion_mnist/dev/")
     x_test, y_test = read_images("data/fashion_mnist/test/")
 
+    print("Loading: ", time.time() - start)
+
     # compute the dataset statistics
     dataset_mean, dataset_std = x_train.mean(), x_train.std()
 
-    x_train_scaled = normalize(x_train, dataset_mean, dataset_std)
-    x_dev_scaled = normalize(x_dev, dataset_mean, dataset_std)
-    x_test_scaled = normalize(x_test, dataset_mean, dataset_std)
+    x_train_scaled = normalize(x_train, dataset_mean, dataset_std).astype(np.float32)
+    x_dev_scaled = normalize(x_dev, dataset_mean, dataset_std).astype(np.float32)
+    x_test_scaled = normalize(x_test, dataset_mean, dataset_std).astype(np.float32)
 
     x_train_scaled = flatten(x_train_scaled)
     x_dev_scaled = flatten(x_dev_scaled)
@@ -222,15 +235,17 @@ if __name__ == "__main__":
     y_train_shuffled = y_train[indices]
 
     # hyperparameters (external parameters set by engineer)
-    learning_rates = [0.01]
-    hidden_units = [50, 100, 200]
-    batch_sizes = [8, 16, 32]
+    learning_rates = [0.001]
+    hidden_units = [200]
+    batch_sizes = [512]
 
     results = []
 
     for lr in learning_rates:
         for hu in hidden_units:
             for bs in batch_sizes:
+
+                start = time.time()
 
                 metrics = train_model(
                     lr_=lr,
@@ -244,7 +259,8 @@ if __name__ == "__main__":
                     "hidden_units": hu,
                     "batch_size": bs,
                     "dev_acc": metrics["dev_acc"],
-                    "dev_loss": metrics["dev_loss"]
+                    "dev_loss": metrics["dev_loss"],
+                    "loop_time": time.time() - start
                 })
 
                 print(results[-1])
