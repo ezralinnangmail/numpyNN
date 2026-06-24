@@ -55,7 +55,7 @@ class AntonMNIST:
         self.vdw2 = np.zeros_like(self.w2)
         self.vdb2 = np.zeros_like(self.b2)
 
-        # store activations for backpropogation and gradients for update
+        # store activations for backpropagation and gradients for update
         self.activations = {}
         self.gradients = {}
 
@@ -85,7 +85,7 @@ class AntonMNIST:
         z2 = np.dot(self.w2, a1) + self.b2
         a2 = self.softmax(z2)
 
-        # saves intermediate values for backpropogation
+        # saves intermediate values for backpropagation
         self.activations["a0"] = inputs
         self.activations["z1"] = z1
         self.activations["a1"] = a1
@@ -103,7 +103,7 @@ class AntonMNIST:
         loss = -np.mean(np.log(correct_class_probs))
         return loss
 
-    # backpropogation = how much each parameter contributed to the loss via gradients
+    # backpropagation = how much each parameter contributed to the loss via gradients
     def calculate_gradients(self, labels2):
         m = labels2.shape[0]
 
@@ -123,7 +123,7 @@ class AntonMNIST:
         self.gradients["dw2"] = dw2
         self.gradients["db2"] = db2
 
-    # update parameters based on the gradients from backpropogation and the learning rate (lr)
+    # update parameters based on the gradients from backpropagation and the learning rate (lr)
     def update_parameters(self, learning_rate, beta=0.9):
         self.vdw1 = beta * self.vdw1 + (1 - beta) * np.square(self.gradients["dw1"])
         self.w1 += - learning_rate * self.gradients["dw1"] / (np.sqrt(self.vdw1) + 1e-8)
@@ -170,17 +170,21 @@ def train_model(
         lr_,
         hu_,
         bs_,
-        ne
+        ne,
+        x_train_,
+        y_train_,
+        x_dev_,
+        y_dev_
 ):
     training_model = AntonMNIST(def_hidden_units=hu_)
 
     for _ in range(ne):
-        indices_ = np.arange(x_train_scaled_shuffled.shape[1])
+        indices_ = np.arange(x_train_.shape[1])
         rng_ = np.random.default_rng(5)
         rng_.shuffle(indices_)
 
-        x_epoch = x_train_scaled_shuffled[:, indices_]
-        y_epoch = y_train_shuffled[indices_]
+        x_epoch = x_train_[:, indices_]
+        y_epoch = y_train_[indices_]
 
         train_batches = get_batches(
             bs_,
@@ -194,11 +198,11 @@ def train_model(
             training_model.calculate_gradients(train_labels)
             training_model.update_parameters(lr_)
 
-    train_dev_logits = training_model.forward(x_dev_scaled)
+    train_dev_logits = training_model.forward(x_dev_)
 
     return {
-        "dev_loss": training_model.calculate_loss(train_dev_logits, y_dev),
-        "dev_acc": accuracy(train_dev_logits, y_dev)
+        "dev_loss": training_model.calculate_loss(train_dev_logits, y_dev_),
+        "dev_acc": accuracy(train_dev_logits, y_dev_)
     }
 
 
@@ -251,7 +255,11 @@ if __name__ == "__main__":
                     lr_=lr,
                     hu_=hu,
                     bs_=bs,
-                    ne=10
+                    ne=10,
+                    x_train_=x_train_scaled_shuffled,
+                    y_train_=y_train_shuffled,
+                    x_dev_=x_dev_scaled,
+                    y_dev_=y_dev
                 )
 
                 results.append({
